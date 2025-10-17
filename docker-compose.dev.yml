@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  video3s:
+    build: .
+    container_name: video3s-dev
+    ports:
+      - "4000:4000"
+    volumes:
+      # Mount source code cho development
+      - .:/app
+      # Mount outputs
+      - ./outputs:/app/outputs
+      - ./uploads:/app/uploads
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

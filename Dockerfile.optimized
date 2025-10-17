@@ -1,0 +1,79 @@
+# Multi-stage build để giảm kích thước image
+
+# Build stage
+FROM python:3.11-slim as builder
+
+# Cài đặt build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Cài đặt Python packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+# Tạo user non-root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Cài đặt runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libfontconfig1 \
+    libxrender1 \
+    libglib2.0-0 \
+    fonts-dejavu-core \
+    fonts-liberation \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy Python packages từ builder stage
+COPY --from=builder /root/.local /home/appuser/.local
+
+# Set PATH để tìm được packages
+ENV PATH=/home/appuser/.local/bin:$PATH
+
+# Tạo thư mục làm việc
+WORKDIR /app
+
+# Copy source code
+COPY --chown=appuser:appuser . .
+
+# Tạo các thư mục cần thiết
+RUN mkdir -p uploads outputs default_images logs \
+    && chown -R appuser:appuser /app
+
+# Tạo ảnh mặc định
+RUN python create_default_images.py
+
+# Copy và cấp quyền cho entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Chuyển sang user non-root
+USER appuser
+
+# Expose port
+EXPOSE 4000
+
+# Biến môi trường
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=production
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:4000/ || exit 1
+
+# Sử dụng entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Chạy ứng dụng
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=4000"]

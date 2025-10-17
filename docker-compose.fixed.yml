@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  video3s:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: video3s-app
+    ports:
+      - "4000:4000"
+    volumes:
+      # Mount thư mục outputs để lưu video
+      - ./outputs:/app/outputs
+      # Mount thư mục uploads để xử lý file upload
+      - ./uploads:/app/uploads
+      # Mount logs (tùy chọn)
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      # Có thể thêm API key vào đây thay vì hardcode
+      # - GEMINI_API_KEY=your_api_key_here
+    restart: unless-stopped
+    # Giới hạn tài nguyên
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Health check (được định nghĩa trong Dockerfile)
+    # healthcheck được kế thừa từ image
+
+  # Nginx reverse proxy (tùy chọn)
+  nginx:
+    image: nginx:alpine
+    container_name: video3s-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - video3s
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

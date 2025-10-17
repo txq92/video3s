@@ -1,0 +1,51 @@
+# Sử dụng Python 3.11 slim base image
+FROM python:3.11-slim
+
+# Cài đặt các thư viện hệ thống cần thiết
+RUN apt-get update && apt-get install -y \\
+    ffmpeg \\
+    libsm6 \\
+    libxext6 \\
+    libfontconfig1 \\
+    libxrender1 \\
+    libgl1-mesa-dri \\
+    libglib2.0-0 \\
+    fonts-dejavu-core \\
+    fonts-liberation \\
+    curl \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Tạo thư mục làm việc
+WORKDIR /app
+
+# Copy requirements và cài đặt Python packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY . .
+
+# Tạo các thư mục cần thiết
+RUN mkdir -p uploads outputs default_images
+
+# Tạo ảnh mặc định
+RUN python create_default_images.py
+
+# Copy và cấp quyền cho entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Expose port
+EXPOSE 4000
+
+# Biến môi trường
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=production
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Sử dụng entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Chạy ứng dụng
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=4000"]
